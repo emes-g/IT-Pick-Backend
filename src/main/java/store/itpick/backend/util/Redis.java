@@ -107,6 +107,18 @@ public class Redis {
         }
     }
 
+    public void saveDay(CommunityType communityType, String date, List<String> keywordList) {
+        ZSetOperations<String, Object> zSetOperations = redisTemplate.opsForZSet();
+
+        String dayKey = makeKey(communityType, PeriodType.BY_DAY, date);
+        redisTemplate.delete(dayKey);   // 기존 키 삭제
+
+        int score = 10;
+        for (int i = 0; i < 10; i++) {
+            zSetOperations.add(dayKey, keywordList.get(i), score--);
+        }
+    }
+
     public GetRankingListResponse getRankingList(CommunityType communityType, PeriodType periodType, String date) {
         ZSetOperations<String, Object> zSetOperations = redisTemplate.opsForZSet();
         String key = makeKey(communityType, periodType, date);
