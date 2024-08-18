@@ -72,6 +72,8 @@ public enum BaseExceptionResponseStatus implements ResponseStatus {
     COMMENT_NOT_FOUND(6005,HttpStatus.BAD_REQUEST.value(), "해당 댓글이 존재하지 않습니다."),
     KEYWORD_NOT_FOUND(6006,HttpStatus.BAD_REQUEST.value(), "해당 키워드가 존재하지 않습니다."),
     INVALID_GET_DEBATE_VALUE(6007,HttpStatus.BAD_REQUEST.value(), "토론 상세 정보 요청에서 잘못된 값이 존재합니다."),
+    INVALID_USER_ID(6008,HttpStatus.BAD_REQUEST.value(), "다른 유저의 토론을 지울 수 없습니다."),
+    DELETED_DEBATE(6009,HttpStatus.BAD_REQUEST.value(), "이미 삭제된 토론입니다."),
 
 
 
@@ -84,6 +86,7 @@ public enum BaseExceptionResponseStatus implements ResponseStatus {
     VOTE_OPTION_NOT_FOUND(7002,HttpStatus.BAD_REQUEST.value(), "해당 투표 옵션이 존재하지 않습니다."),
     INVALID_VOTE_DELETE_VALUE(7003,HttpStatus.BAD_REQUEST.value(), "투표 취소 요청에서 잘못된 값이 존재합니다."),
     USER_VOTE_CHOICE_NOT_FOUND(7004,HttpStatus.BAD_REQUEST.value(), "투표하지 않았기 때문에 취소할 수 없습니다."),
+    MULTIPLE_SELECTION_NOT_ALLOWED(7005,HttpStatus.BAD_REQUEST.value(), "복수 투표가 허용되지 않습니다."),
 
 
 

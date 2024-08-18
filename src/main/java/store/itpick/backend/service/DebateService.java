@@ -21,6 +21,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 import static store.itpick.backend.common.response.status.BaseExceptionResponseStatus.*;
 
@@ -39,11 +40,12 @@ public class DebateService {
     private final VoteService voteService;
     private final JwtProvider jwtProvider;
     private final S3ImageBucketService s3ImageBucketService;
+    private final RecentViewedDebateRepository recentViewedDebateRepository;
 
     @Transactional
-    public PostDebateResponse createDebate(PostDebateRequest postDebateRequest) {
+    public PostDebateResponse createDebate(PostDebateRequest postDebateRequest, long userId) {
 
-        User user = userRepository.findById(postDebateRequest.getUserId())
+        User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserException(USER_NOT_FOUND));
 
         Keyword keyword = keywordRepository.findById(postDebateRequest.getKeywordId())
@@ -64,6 +66,7 @@ public class DebateService {
         if (voteOptions != null && !voteOptions.isEmpty()) {
             PostVoteRequest postVoteRequest = new PostVoteRequest();
             postVoteRequest.setDebateId(debate.getDebateId());
+            postVoteRequest.setMultipleChoice(postDebateRequest.isMultipleChoice());
             voteService.createVote(postVoteRequest, postDebateRequest.getVoteOptions());
         }
 
@@ -71,7 +74,7 @@ public class DebateService {
     }
 
     @Transactional
-    public PostCommentResponse createComment(PostCommentRequest postCommentRequest) {
+    public PostCommentResponse createComment(PostCommentRequest postCommentRequest, long userId) {
 
         Optional<Debate> debateOptional = debateRepository.findById(postCommentRequest.getDebateId());
         if (!debateOptional.isPresent()) {
@@ -87,7 +90,7 @@ public class DebateService {
             } else throw new DebateException(COMMENT_PARENT_NOT_FOUND);
         }
 
-        Optional<User> userOptional = userRepository.findById(postCommentRequest.getUserId());
+        Optional<User> userOptional = userRepository.findById(userId);
         if (!userOptional.isPresent()) {
             throw new AuthException(USER_NOT_FOUND);
         }
@@ -101,9 +104,9 @@ public class DebateService {
     }
 
     @Transactional
-    public PostCommentHeartResponse creatCommentHeart(PostCommentHeartRequest postCommentHeartRequest) {
+    public PostCommentHeartResponse creatCommentHeart(PostCommentHeartRequest postCommentHeartRequest, long userId) {
 
-        Optional<User> userOptional = userRepository.findById(postCommentHeartRequest.getUserId());
+        Optional<User> userOptional = userRepository.findById(userId);
         if (!userOptional.isPresent()) {
             throw new AuthException(USER_NOT_FOUND);
         }
@@ -136,17 +139,17 @@ public class DebateService {
     }
 
     @Transactional
-    public GetDebateResponse getDebate(Long debateId, String token) {
-
-        if (jwtProvider.isExpiredToken(token)) {
-            throw new JwtUnauthorizedTokenException(INVALID_TOKEN);
-
-        }
-
-        Long userId = jwtProvider.getUserIdFromToken(token);
+    public GetDebateResponse getDebate(Long debateId, long userId) {
 
         Debate debate = debateRepository.findById(debateId)
                 .orElseThrow(() -> new DebateException(DEBATE_NOT_FOUND));
+
+        if(debate.getStatus().equals("deleted")) throw new DebateException(DEBATE_NOT_FOUND);
+
+
+        // 최근 본 토론 기록 생성 및 저장
+        saveRecentViewedDebate(userId, debate);
+
 
         debate.setHits(debate.getHits() + 1);
         debateRepository.save(debate);
@@ -157,10 +160,11 @@ public class DebateService {
         String userVoteOptionText = null;
 
         for (VoteOption voteOption : debate.getVote().getVoteOptions()) {
-            UserVoteChoice userVoteChoice = userVoteChoiceRepository.findByVoteOptionAndUser(voteOption, user);
-            if (userVoteChoice != null) {
+            List<UserVoteChoice> userVoteChoices = userVoteChoiceRepository.findByVoteOptionAndUser(voteOption, user);
+            if (!userVoteChoices.isEmpty()) {
                 userVoted = true;
-                userVoteOptionText = voteOption.getOptionText();
+                // 여러 선택지 중 첫 번째 선택된 옵션의 텍스트를 가져옴 (필요에 따라 조정 가능)
+                userVoteOptionText = userVoteChoices.get(0).getVoteOption().getOptionText();
                 break;
             }
         }
@@ -193,6 +197,8 @@ public class DebateService {
 
         return GetDebateResponse.builder()
                 .debateId(debate.getDebateId())
+                .debateImgUrl(debate.getImageUrl())
+                .multipleChoice(debate.getVote().isMultipleChoice())
                 .title(debate.getTitle())
                 .content(debate.getContent())
                 .hits(debate.getHits())
@@ -209,7 +215,7 @@ public class DebateService {
                 .userVoteOptionText(userVoteOptionText)
                 .build();
     }
-    
+
     @Transactional
     public List<DebateByKeywordDTO> GetDebatesByKeyword(Long keywordID, String sort){
         List<Debate> debates=null;
@@ -222,15 +228,70 @@ public class DebateService {
         List<DebateByKeywordDTO> debateList = new ArrayList<>();
 
         for (Debate debate : debates) {
-            String title= debate.getTitle();
-            String content =debate.getContent();
-            String mediaUrl =null;
-            Long hit = debate.getHits();
-            Long comment = (long) debate.getComment().size();
-            debateList.add(new DebateByKeywordDTO(title,content,mediaUrl,hit,comment));
+            if(debate.getStatus().equals("active")){
+                String title= debate.getTitle();
+                String content =debate.getContent();
+                String mediaUrl =debate.getImageUrl();
+                Long hit = debate.getHits();
+                Long comment = (long) debate.getComment().size();
+                debateList.add(new DebateByKeywordDTO(title,content,mediaUrl,hit,comment));
+            }
         }
 
         return debateList;
 
     }
+    private void saveRecentViewedDebate(Long userId, Debate debate) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new UserException(USER_NOT_FOUND));
+
+        RecentViewedDebate recentViewedDebate = new RecentViewedDebate();
+        recentViewedDebate.setUser(user);
+        recentViewedDebate.setDebate(debate);
+        recentViewedDebate.setViewedAt(new Timestamp(System.currentTimeMillis())); // 시청 시간을 저장
+
+        recentViewedDebateRepository.save(recentViewedDebate);
+    }
+
+    public List<DebateByKeywordDTO> getRecentViewedDebate(long userId){
+
+        List<RecentViewedDebate> recentViewedDebates = recentViewedDebateRepository.findByUser_UserIdOrderByViewedAtDesc(userId);
+
+        // Debate ID를 통해 Debate 엔티티를 조회
+        List<Long> debateIds = recentViewedDebates.stream()
+                .map(recentViewedDebate -> recentViewedDebate.getDebate().getDebateId())
+                .collect(Collectors.toList());
+
+        List<Debate> debates = debateRepository.findAllById(debateIds);
+
+        // Debate를 DTO로 변환
+        return debates.stream()
+                .filter(debate -> "active".equals(debate.getStatus()))
+                .map(debate -> new DebateByKeywordDTO(debate.getTitle(), debate.getContent(), debate.getImageUrl(),debate.getHits(), (long) debate.getComment().size()))
+                .collect(Collectors.toList());
+
+    }
+
+    @Transactional
+    public void deleteDebate(Long debateId, long userId) {
+        Optional<Debate> debate = debateRepository.getDebateByDebateId(debateId);
+
+        if (debate.isEmpty()) {
+            throw new DebateException(DEBATE_NOT_FOUND);
+        }
+
+        if (!debate.get().getUser().getUserId().equals(userId)) {
+            throw new DebateException(INVALID_USER_ID);
+        }
+
+        if(debate.get().getStatus().equals("deleted")){
+            throw new DebateException(DELETED_DEBATE);
+        }
+
+
+        debateRepository.softDeleteById(debateId);
+
+
+    }
+
 }
