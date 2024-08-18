@@ -119,6 +119,26 @@ public class Redis {
         }
     }
 
+    public void saveDayTotalManually(String date) {
+        ZSetOperations<String, Object> zSetOperations = redisTemplate.opsForZSet();
+
+        String totalKey = makeKey(CommunityType.TOTAL, PeriodType.BY_DAY, date);
+        List<String> keyList = getKeyList(PeriodType.BY_DAY, date); // key for naver, nate, zum, google, namuwiki
+        redisTemplate.delete(totalKey);   // 기존 키 삭제
+
+        for (String key : keyList) {
+            int weight = getWeight(key);
+            int rank = 1;
+            for (Object keyword : zSetOperations.reverseRange(key, 0, 9)) {
+                int score = (11 - rank) * weight;
+                if (!Boolean.TRUE.equals(zSetOperations.addIfAbsent(totalKey, keyword, score))) {
+                    zSetOperations.add(totalKey, keyword, score + zSetOperations.score(totalKey, keyword));
+                }
+                rank++;
+            }
+        }
+    }
+
     public GetRankingListResponse getRankingList(CommunityType communityType, PeriodType periodType, String date) {
         ZSetOperations<String, Object> zSetOperations = redisTemplate.opsForZSet();
         String key = makeKey(communityType, periodType, date);

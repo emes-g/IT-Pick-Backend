@@ -71,6 +71,20 @@ public class TestController {
         return "success";
     }
 
+    @GetMapping("/save-day-total-manually")
+    public String saveDayTotalManually() {
+        List<String> dateList = new ArrayList<>(Arrays.asList("240805", "240806", "240807", "240808", "240809", "240810", "240811", "240812", "240813", "240814", "240815"));
+
+        for (String date : dateList) {
+            if (!RankController.isValidatedDate(PeriodType.BY_DAY, date)) {
+                return "failed";
+            }
+            redis.saveDayTotalManually(date);
+            System.out.printf("total\t%s\t완료\n", date);
+        }
+        return "success";
+    }
+
     private List<String> getKeywordList(CommunityType communityType, String date) {
         switch (communityType) {
             case NAVER:
