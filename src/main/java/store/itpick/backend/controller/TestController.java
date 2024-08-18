@@ -40,8 +40,8 @@ public class TestController {
         redis.saveTotalRanking(PeriodType.BY_WEEK);
     }
 
-    @GetMapping("/save-manually")
-    public String saveManually() {
+    @GetMapping("/save-day-manually")
+    public String saveDayManually() {
         List<String> dateList = new ArrayList<>(Arrays.asList("240805", "240806", "240807", "240808", "240809", "240810", "240811", "240812", "240813", "240814", "240815"));
         List<CommunityType> communityTypeList = CommunityType.getAllExceptTotal();
         for (CommunityType communityType : communityTypeList) {
@@ -82,6 +82,13 @@ public class TestController {
             redis.saveDayTotalManually(date);
             System.out.printf("total\t%s\t완료\n", date);
         }
+        return "success";
+    }
+
+    @GetMapping("/save-week-manually")
+    public String saveWeekManually() {
+        redis.saveWeek();
+        redis.saveTotalRanking(PeriodType.BY_WEEK);
         return "success";
     }
 
@@ -283,31 +290,4 @@ public class TestController {
         }
         return null;
     }
-
-//    public static void main(String[] args) {
-//        List<String> list = new ArrayList<>(Arrays.asList(
-//                "방시혁 과즙세연", "구로역서 2명 사망", "김유진", "여자 탁구 동메달", "네이버 2분기 4727억 원",
-//                "올림픽 메달 순위", "카라 니콜 허영지", "한지민 최정훈", "민희진 성희롱 어도어", "양지은 부친상 신장"));
-//
-//        extracted(list);
-//        extracted(list);
-//        extracted(list);
-//        extracted(list);
-//    }
-//
-//    private static void extracted(List<String> list) {
-//        Collections.shuffle(list);
-//        StringBuilder sb = new StringBuilder();
-//        for (int i = 0; i< list.size(); i++) {
-//            sb.append('"').append(list.get(i)).append('"');
-//            if (i != list.size() - 1) {
-//                sb.append(", ");
-//            }
-//            if (i == 4) {
-//                sb.append('\n');
-//            }
-//        }
-//        sb.append('\n');
-//        System.out.println(sb);
-//    }
 }
